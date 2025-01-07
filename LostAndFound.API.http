@@ -1,0 +1,6 @@
+@LostAndFound.API_HostAddress = http://localhost:5130
+
+GET {{LostAndFound.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
