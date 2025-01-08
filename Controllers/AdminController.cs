@@ -139,5 +139,36 @@ namespace LostAndFound.API.Controllers
             await _context.SaveChangesAsync();
             return NoContent();
         }
+
+        [HttpPost("users")]
+        public async Task<ActionResult<UserDto>> CreateUser([FromBody] CreateUserDto createUserDto)
+        {
+            if (await _context.Users.AnyAsync(u => u.Email == createUserDto.Email))
+            {
+                return BadRequest(new { message = "Email already exists" });
+            }
+
+            var user = new User
+            {
+                Email = createUserDto.Email,
+                Password = _authService.HashPassword(createUserDto.Password),
+                Name = createUserDto.Name,
+                Role = createUserDto.Role,
+                Status = "active",
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _context.Users.Add(user);
+            await _context.SaveChangesAsync();
+
+            return Ok(new UserDto
+            {
+                Id = user.Id,
+                Email = user.Email,
+                Name = user.Name,
+                Role = user.Role,
+                Status = user.Status
+            });
+        }
     }
 }
