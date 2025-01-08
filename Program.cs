@@ -60,6 +60,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 // Add these services
 builder.Services.AddScoped<IFileService, FileService>();
 builder.Services.AddScoped<ISearchService, SearchService>();
+builder.Services.AddScoped<IImageService, ImageService>();
 
 builder.Services.Configure<IISServerOptions>(options =>
 {
@@ -124,5 +125,15 @@ using (var scope = app.Services.CreateScope())
         logger.LogError(ex, "An error occurred while seeding the database.");
     }
 }
+
+// Configurez les fichiers statiques
+app.UseStaticFiles(); // Pour le dossier wwwroot par défaut
+
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new PhysicalFileProvider(
+        Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads")),
+    RequestPath = "/uploads"
+});
 
 app.Run();

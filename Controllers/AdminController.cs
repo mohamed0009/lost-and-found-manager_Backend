@@ -5,6 +5,9 @@ using LostAndFound.API.Data;
 using LostAndFound.API.Models;
 using LostAndFound.API.Models.Dtos;
 using Microsoft.Extensions.Logging;
+using LostAndFound.API.DTOs;
+using LostAndFound.API.Services;
+using BCrypt.Net;
 
 namespace LostAndFound.API.Controllers
 {
@@ -15,11 +18,13 @@ namespace LostAndFound.API.Controllers
     {
         private readonly ApplicationDbContext _context;
         private readonly ILogger<AdminController> _logger;
+        private readonly IImageService _imageService;
 
-        public AdminController(ApplicationDbContext context, ILogger<AdminController> logger)
+        public AdminController(ApplicationDbContext context, ILogger<AdminController> logger, IImageService imageService)
         {
             _context = context;
             _logger = logger;
+            _imageService = imageService;
         }
 
         [HttpGet("users")]
@@ -141,34 +146,93 @@ namespace LostAndFound.API.Controllers
         }
 
         [HttpPost("users")]
-        public async Task<ActionResult<UserDto>> CreateUser([FromBody] CreateUserDto createUserDto)
+        public async Task<IActionResult> CreateUser([FromBody] CreateUserDto userDto)
         {
-            if (await _context.Users.AnyAsync(u => u.Email == createUserDto.Email))
+            try
             {
-                return BadRequest(new { message = "Email already exists" });
+                if (await _context.Users.AnyAsync(u => u.Email == userDto.Email))
+                {
+                    return BadRequest(new { message = "Email already exists" });
+                }
+
+                var user = new User
+                {
+                    Email = userDto.Email,
+                    Password = BCrypt.Net.BCrypt.HashPassword(userDto.Password),
+                    Name = userDto.Name,
+                    Role = userDto.Role,
+                    Status = "active",
+                    CreatedAt = DateTime.UtcNow,
+                    LastLogin = DateTime.UtcNow
+                };
+
+                _context.Users.Add(user);
+                await _context.SaveChangesAsync();
+
+                return CreatedAtAction(nameof(GetUser), new { id = user.Id }, user);
             }
-
-            var user = new User
+            catch (Exception ex)
             {
-                Email = createUserDto.Email,
-                Password = _authService.HashPassword(createUserDto.Password),
-                Name = createUserDto.Name,
-                Role = createUserDto.Role,
-                Status = "active",
-                CreatedAt = DateTime.UtcNow
-            };
+                return StatusCode(500, new { message = ex.Message });
+            }
+        }
 
-            _context.Users.Add(user);
-            await _context.SaveChangesAsync();
-
-            return Ok(new UserDto
+        [HttpPost("items")]
+        public async Task<IActionResult> CreateItem([FromForm] ItemCreateDto itemDto)
+        {
+            try
             {
-                Id = user.Id,
-                Email = user.Email,
-                Name = user.Name,
-                Role = user.Role,
-                Status = user.Status
-            });
+                var item = new Item
+                {
+                    Description = itemDto.Description,
+                    Location = itemDto.Location,
+                    Type = itemDto.Type,
+                    Category = itemDto.Category,
+                    Status = "pending",
+                    ReportedDate = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+
+                if (itemDto.Image != null)
+                {
+                    item.ImageUrl = await _imageService.SaveImageAsync(itemDto.Image);
+                }
+                else if (!string.IsNullOrEmpty(itemDto.ImageUrl))
+                {
+                    item.ImageUrl = itemDto.ImageUrl;
+                }
+
+                _context.Items.Add(item);
+                await _context.SaveChangesAsync();
+
+                return CreatedAtAction(nameof(GetItem), new { id = item.Id }, item);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = ex.Message });
+            }
+        }
+
+        [HttpGet("users/{id}")]
+        public async Task<IActionResult> GetUser(int id)
+        {
+            var user = await _context.Users.FindAsync(id);
+            if (user == null)
+            {
+                return NotFound();
+            }
+            return Ok(user);
+        }
+
+        [HttpGet("items/{id}")]
+        public async Task<IActionResult> GetItem(int id)
+        {
+            var item = await _context.Items.FindAsync(id);
+            if (item == null)
+            {
+                return NotFound();
+            }
+            return Ok(item);
         }
     }
 }
